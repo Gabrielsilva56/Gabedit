@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Gabedit</title>
+  <style>
+  body, html {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+
+    #editor {
+      position: relative;
+      width: 100%;
+      height: calc(100% - 40px);
+      border: none;
+      outline: none;
+      padding: 10px;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      resize: none;
+      overflow: auto;
+    }
+
+    #header {
+      background-color: #f2f2f2;
+      padding: 10px;
+      text-align: right;
+    }
+
+    .draggable {
+      position: absolute;
+      cursor: move;
+    }
+
+    .textbox {
+      border: 1px dashed #ccc;
+      padding: 5px;
+      background-color: #fff;
+    }
+
+    .image-options {
+      display: none;
+    }
+
+    .image-options.visible {
+      display: block;
+    }
+
+    /* Estilo para a caixa de texto adicional */
+    .textbox + .textbox {
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <button id="boldButton">Negrito</button>
+    <div id="imageOptions" class="image-options">
+      Largura: <input type="text" id="widthInput"> px&nbsp;&nbsp;
+      <input type="checkbox" id="lockWidthCheckbox"> Travar Largura&nbsp;&nbsp;
+      Altura: <input type="text" id="heightInput"> px&nbsp;&nbsp;
+      <input type="checkbox" id="lockHeightCheckbox"> Travar Altura&nbsp;&nbsp;
+    </div>
+    <input type="file" id="imageInput" accept="image/*">
+    <button id="saveButton">Salvar</button>
+  </div>
+  <div id="editor" contenteditable="true"></div>
+
+  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+  <script>
+    const editor = document.getElementById('editor');
+    const boldButton = document.getElementById('boldButton');
+    const imageInput = document.getElementById('imageInput');
+    const widthInput = document.getElementById('widthInput');
+    const heightInput = document.getElementById('heightInput');
+    const lockWidthCheckbox = document.getElementById('lockWidthCheckbox');
+    const lockHeightCheckbox = document.getElementById('lockHeightCheckbox');
+    let selectedImage = null;
+    let selectedTextbox = null;
+
+    boldButton.addEventListener('click', function() {
+      document.execCommand('bold', false, null);
+    });
+
+    imageInput.addEventListener('change', function(event) {
+      const file = event.target.files[0];
+      const reader = new FileReader();
+
+      reader.onload = function() {
+        const imageUrl = reader.result;
+        const imgElement = document.createElement('img');
+        imgElement.src = imageUrl;
+        imgElement.classList.add('draggable');
+        editor.appendChild(imgElement);
+        makeElementDraggable(imgElement);
+      };
+
+      reader.readAsDataURL(file);
+    });
+
+    function makeElementDraggable(element) {
+      let pos1 = 0,
+          pos2 = 0,
+          pos3 = 0,
+          pos4 = 0;
+
+      element.addEventListener('mousedown', dragMouseDown);
+
+      function dragMouseDown(event) {
+        event = event || window.event;
+        event.preventDefault();
+        pos3 = event.clientX;
+        pos4 = event.clientY;
+        document.addEventListener('mousemove', elementDrag);
+        document.addEventListener('mouseup', stopElementDrag);
+      }
+
+      function elementDrag(event) {
+        event = event || window.event;
+        event.preventDefault();
+        pos1 = pos3 - event.clientX;
+        pos2 = pos4 - event.clientY;
+        pos3 = event.clientX;
+        pos4 = event.clientY;
+        element.style.top = (element.offsetTop - pos2) + 'px';
+        element.style.left = (element.offsetLeft - pos1) + 'px';
+      }
+
+      function stopElementDrag() {
+        document.removeEventListener('mousemove', elementDrag);
+        document.removeEventListener('mouseup', stopElementDrag);
+      }
+    }
+
+    editor.addEventListener('click', function(event) {
+      const target = event.target;
+      if (target.classList.contains('textbox')) {
+        target.contentEditable = 'true';
+        target.focus();
+        selectedTextbox = target;
+        hideImageOptions();
+      } else if (target.tagName === 'IMG') {
+        if (selectedImage) {
+          selectedImage.classList.remove('selected');
+          hideImageOptions();
+        }
+        selectedImage = target;
+        selectedImage.classList.add('selected');
+        showImageOptions();
+        updateImageOptions();
+      } else {
+        const textBoxes = document.getElementsByClassName('textbox');
+        for (let i = 0; i < textBoxes.length; i++) {
+          const textBox = textBoxes[i];
+          if (textBox.textContent.trim() === '') {
+            textBox.remove();
+          }
+        }
+        const textBox = document.createElement('div');
+        textBox.contentEditable = 'true';
+        textBox.classList.add('draggable', 'textbox');
+        textBox.style.position = 'absolute';
+        textBox.style.top = event.clientY + 'px';
+        textBox.style.left = event.clientX + 'px';
+        editor.appendChild(textBox);
+        makeElementDraggable(textBox);
+        textBox.focus();
+        selectedTextbox = textBox;
+        hideImageOptions();
+      }
+    });
+
+    editor.addEventListener('input', function(event) {
+      const target = event.target;
+      if (target.tagName !== 'IMG' && !target.classList.contains('textbox')) return;
+      selectedTextbox = target;
+    });
+
+    function showImageOptions() {
+      document.getElementById('imageOptions').classList.add('visible');
+    }
+
+    function hideImageOptions() {
+      document.getElementById('imageOptions').classList.remove('visible');
+    }
+
+    function updateImageOptions() {
+      widthInput.value = selectedImage.offsetWidth;
+      heightInput.value = selectedImage.offsetHeight;
+    }
+
+    widthInput.addEventListener('input', function() {
+      if (lockWidthCheckbox.checked) return;
+      selectedImage.style.width = widthInput.value + 'px';
+    });
+
+    heightInput.addEventListener('input', function() {
+      if (lockHeightCheckbox.checked) return;
+      selectedImage.style.height = heightInput.value + 'px';
+    });
+
+    lockWidthCheckbox.addEventListener('change', function() {
+      if (lockWidthCheckbox.checked) {
+        selectedImage.style.width = widthInput.value + 'px';
+        widthInput.disabled = true;
+      } else {
+        widthInput.disabled = false;
+      }
+    });
+
+    lockHeightCheckbox.addEventListener('change', function() {
+      if (lockHeightCheckbox.checked) {
+        selectedImage.style.height = heightInput.value + 'px';
+        heightInput.disabled = true;
+      } else {
+        heightInput.disabled = false;
+      }
+    });
+
+    document.addEventListener('keydown', function(event) {
+      if (event.key === 'Delete') {
+        if (selectedImage) {
+          selectedImage.remove();
+          selectedImage = null;
+          hideImageOptions();
+        }
+        if (selectedTextbox) {
+          selectedTextbox.remove();
+          selectedTextbox = null;
+        }
+      }
+    });
+
+    editor.addEventListener('mousedown', function(event) {
+      const target = event.target;
+      if (target.classList.contains('textbox')) {
+        selectedTextbox = target;
+        hideImageOptions();
+      } else if (target.tagName !== 'IMG') {
+        const textBoxes = document.getElementsByClassName('textbox');
+        for (let i = 0; i < textBoxes.length; i++) {
+          const textBox = textBoxes[i];
+          if (textBox.textContent.trim() === '') {
+            textBox.remove();
+          }
+        }
+        selectedTextbox = null;
+        hideImageOptions();
+      }
+    });
+
+    editor.addEventListener('focusout', function(event) {
+      const target = event.target;
+      if (target.classList.contains('textbox') && target.textContent.trim() === '') {
+        target.remove();
+      }
+    });
+
+    editor.addEventListener('keydown', function(event) {
+      const target = event.target;
+      if (target.classList.contains('textbox') && event.key === 'Enter') {
+        event.preventDefault();
+        const range = window.getSelection().getRangeAt(0);
+        const br = document.createElement('br');
+        const textNode = document.createTextNode('\u200B');
+        range.insertNode(br);
+        range.collapse(false);
+        range.insertNode(textNode);
+        range.selectNodeContents(textNode);
+        const caretRange = document.createRange();
+        caretRange.setStartAfter(textNode);
+        caretRange.collapse(true);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(caretRange);
+      }
+    });
+
+    document.getElementById('saveButton').addEventListener('click', function() {
+      html2canvas(editor).then(function(canvas) {
+        const link = document.createElement('a');
+        link.href = canvas.toDataURL('image/png');
+        link.download = 'editor.png';
+        link.click();
+      });
+    });
+  </script>
+</body>
+</html>
